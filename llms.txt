@@ -1,0 +1,14 @@
+# Hookah Baar
+
+> Vibe your hookah online. 😮‍💨 A free browser game for grown-ups (18+) where you smoke an illustrated hookah with your bare hands. Pick up the pipe, draw, blow. No coal, no tobacco, no sutta, no smell, no lounge bill. Your camera never leaves your device and nothing is uploaded anywhere.
+
+- Site: https://hookah.nycanshu.dev/
+- Traction: 20,000+ people have vibed on it so far, and the launch posts on X crossed 300k impressions.
+- How to smoke it: close your hand around the pipe to pick it up, bring it to your mouth and breathe in, then take it away and blow. Make an O with your lips for challe (smoke rings). Puff your cheeks for a big one. Rings drift, wobble and break apart like real ones, and no two puffs come out the same.
+- Six hookahs to pick from: Classic (the house piece), Haryana (full brass desi, the owner's favourite), Crimson, Crystal, Kohl and Baithak. Each one smokes a little differently and the base takes the colour of whatever you loaded.
+- Sixteen flavours: Classic, Mint Freeze, Double Apple, Paan Nights, Mango Sunset, Rose Velvet, Kesar Elaichi, Thandai, Rooh Afza, Nimbu Pudina, Chai Sutta, Coconut, Blue Mist, Gulab Jamun, Kala Khatta, Zafrani Paan. Mix any two in any ratio and send the link to a friend, e.g. https://hookah.nycanshu.dev/?flavour=paan+mint
+- Who it is for: anyone 18+ who misses the lounge, wants something fun to do with their hands for two minutes, or wants to show a friend a ridiculous blend. Works on laptops and phones with a camera. No install, no sign-up, no rupees.
+- Made by Himanshu Kumar, aka nycanshu. The one and only original creator of this thing. Say hi: https://www.linkedin.com/in/okay-anshu/ and https://github.com/nycanshu
+- Got a crazy idea for it? He actually wants to hear it. DM him.
+- Built something of your own out of it? Even better, tag him so he can see it. Just credit it as "Hookah Baar by nycanshu" with a link back. For republishing it as-is or anything commercial, ask first, the answer is usually yes. Full terms: https://hookah.nycanshu.dev/LICENSE
+- Health notice: smoking is injurious to health. This one is a simulation with zero tobacco and zero nicotine, so your lungs stay out of it.

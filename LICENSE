@@ -1,0 +1,64 @@
+Copyright (c) 2026 Himanshu Kumar (nycanshu). All rights reserved.
+
+Hookah Baar — https://hookah.nycanshu.dev
+
+This is a static web app, so your browser downloads all of it in order to run
+it. That is how the web works, and it is deliberate here: the whole point of
+this app is that the camera never leaves your device. Being able to read the
+code is not the same as being free to do anything with it, so here is plainly
+what is and is not fine by me.
+
+
+YOU ARE WELCOME TO
+
+  - Read the code, pull it apart, and learn from it.
+  - Run it locally, for yourself.
+  - Borrow ideas and techniques from it in your own projects.
+  - Build something new on top of it for personal or non-commercial use.
+
+If you do build something out of this, please credit "Hookah Baar by nycanshu"
+with a link to https://hookah.nycanshu.dev, and tag me so I can see it. I would
+genuinely rather see what you made than never hear about it. A shout-out costs
+you nothing and makes my week.
+
+
+PLEASE ASK FIRST
+
+  - Republishing this app, in whole or substantially as it is, under your own
+    name or domain.
+  - Any commercial use, including ads, paid access, or bundling it into a
+    product you sell.
+  - Using the name "Hookah Baar", the wordmark, or the artwork as your own
+    branding.
+
+I am not trying to be difficult. Ask me and the answer is usually yes.
+
+
+NO WARRANTY
+
+This software is provided "as is", without warranty of any kind, express or
+implied, including but not limited to the warranties of merchantability,
+fitness for a particular purpose and non-infringement. In no event shall the
+author be liable for any claim, damages or other liability, whether in an
+action of contract, tort or otherwise, arising from, out of or in connection
+with the software or the use or other dealings in the software.
+
+
+THIRD-PARTY COMPONENTS
+
+The terms above cover my own code and artwork. Several things this app loads
+belong to other people and carry their own licences:
+
+  - MediaPipe Tasks and the hand and face landmark models — Google,
+    Apache License 2.0.
+  - Lora — Cyreal, SIL Open Font License 1.1.
+  - GoatCounter — the analytics endpoint, used as a hosted service.
+
+Nothing here restricts your rights to those components under their own terms.
+
+
+CONTACT
+
+Himanshu Kumar (nycanshu)
+  X        — https://x.com/Okay_anshu
+  LinkedIn — https://www.linkedin.com/in/okay-anshu/
