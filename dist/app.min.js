@@ -2575,15 +2575,18 @@ var Oe = (t, o, e) => Math.min(e, Math.max(o, t));
 function nt(t, o, e, s = !1) {
   ((t = Math.max(0, t)), (e = Oe(e, 0, 1)));
   let a = s ? 0 : e * Math.PI,
-    r = s ? 0 : 0.06 * Math.sin(Math.PI * e),
-    l = s ? 0.9 : 0.85 + 0.1 * Math.sin(o + a),
+    l = s ? 0.9 : 0.86 + 0.08 * Math.sin(o + a),
     n = o * 0.2 + (s ? 0 : e * 0.15),
     c = Math.cos(n),
     i = Math.sin(n),
-    h = new Array(48);
-  for (let d = 0; d < 48; d++) {
-    let p = (d / 48) * Math.PI * 2,
-      f = t * (1 + r * Math.sin(3 * p + o + a)),
+    h = new Array(56);
+  for (let d = 0; d < 56; d++) {
+    let p = (d / 56) * Math.PI * 2,
+      wobble1 = (0.09 + 0.07 * e) * Math.sin(3 * p + o + a),
+      wobble2 = (0.06 + 0.05 * e) * Math.cos(5 * p + o * 1.5),
+      wobble3 = 0.04 * Math.sin(2 * p + o * 0.8),
+      wobble4 = 0.03 * Math.sin(7 * p + o * 2.2),
+      f = t * (1 + wobble1 + wobble2 + wobble3 + wobble4),
       m = f * Math.cos(p),
       y = f * l * Math.sin(p);
     h[d] = [m * c - y * i, m * i + y * c];
@@ -2593,7 +2596,7 @@ function nt(t, o, e, s = !1) {
 function it(t) {
   return (
     (t = Oe(t, 0, 1)),
-    Oe(48 - Math.floor(48 * Math.max(0, (t - 0.75) / 0.25)), 0, 48)
+    Oe(56 - Math.floor(56 * Math.max(0, (t - 0.75) / 0.25)), 0, 56)
   );
 }
 var Ae = Object.freeze({ growth: 1, lift: 1, curl: 1, drag: 1 });
@@ -2849,6 +2852,81 @@ var Re = Object.freeze({
     hasBreathSmoke() {
       return this.p.some((n) => !n.gas);
     }
+    interactWithHands(handsData, dt) {
+      if (!this.handHistory) this.handHistory = [];
+      if (!handsData || !handsData.length) {
+        this.handHistory = [];
+        return;
+      }
+      let activeHands = [];
+      for (let h of handsData) {
+        if (!h || h.x == null || h.y == null) continue;
+        let hx = h.x, hy = h.y;
+        let prev = null;
+        let minDist = 220 * this.k;
+        for (let ph of this.handHistory) {
+          let d = Math.hypot(ph.x - hx, ph.y - hy);
+          if (d < minDist) {
+            minDist = d;
+            prev = ph;
+          }
+        }
+        let vx = 0, vy = 0;
+        if (prev && dt > 0.0001) {
+          vx = (hx - prev.x) / dt;
+          vy = (hy - prev.y) / dt;
+          let maxSpeed = 1500 * this.k;
+          let spd = Math.hypot(vx, vy);
+          if (spd > maxSpeed) {
+            vx = (vx / spd) * maxSpeed;
+            vy = (vy / spd) * maxSpeed;
+          }
+        }
+        activeHands.push({ x: hx, y: hy, vx, vy });
+      }
+      this.handHistory = activeHands;
+
+      for (let hand of activeHands) {
+        let hx = hand.x, hy = hand.y;
+        let hvx = hand.vx, hvy = hand.vy;
+        let handSpeed = Math.hypot(hvx, hvy);
+
+        for (let p of this.p) {
+          let dx = p.x - hx;
+          let dy = p.y - hy;
+          let dist = Math.hypot(dx, dy);
+
+          if (p.ring) {
+            let ringR = Math.max(p.r, 45 * this.k);
+            let reach = 260 * this.k + ringR;
+            if (dist < reach && dist > 1) {
+              let factor = Math.pow(1 - dist / reach, 1.25);
+              let nx = dx / dist;
+              let ny = dy / dist;
+
+              if (handSpeed > 25 * this.k) {
+                p.vx += hvx * factor * 0.95 * dt;
+                p.vy += hvy * factor * 0.65 * dt;
+              }
+
+              let pushSpeed = (140 + handSpeed * 0.35) * this.k * factor * dt;
+              p.vx += nx * pushSpeed * 1.8;
+              p.vy += ny * pushSpeed * 0.7;
+              p.seed += (nx * (hvy || 20) - ny * (hvx || 20)) * 0.0015;
+            }
+          } else if (!p.gas) {
+            let reach = 190 * this.k;
+            if (dist < reach && dist > 1) {
+              let factor = Math.pow(1 - dist / reach, 1.4);
+              let nx = dx / dist;
+              let ny = dy / dist;
+              p.vx += nx * 110 * this.k * factor * dt + hvx * factor * 0.3 * dt;
+              p.vy += ny * 110 * this.k * factor * dt + hvy * factor * 0.3 * dt;
+            }
+          }
+        }
+      }
+    }
     interactWithFingers(fingers, dt) {
       if (!this.fingerTrails) {
         this.fingerTrails = new Map();
@@ -2981,14 +3059,14 @@ var Re = Object.freeze({
     spawnFingerRing(cx, cy, avgR, direction = 1, nearby = []) {
       let f = this.flavour;
       let ringRadius = Math.max(34 * this.k, avgR);
-      let life = 4.2 * f.life;
+      let life = 4.8 * f.life;
       let seed = Math.random() * 6.28;
 
       if (nearby && nearby.length) {
         for (let p of nearby.slice(0, 24)) {
           let angle = Math.atan2(p.y - cy, p.x - cx);
-          p.x = cx + Math.cos(angle) * ringRadius + (Math.random() - 0.5) * 6 * this.k;
-          p.y = cy + Math.sin(angle) * ringRadius + (Math.random() - 0.5) * 6 * this.k;
+          p.x = cx + Math.cos(angle) * ringRadius + (Math.random() - 0.5) * 8 * this.k;
+          p.y = cy + Math.sin(angle) * ringRadius + (Math.random() - 0.5) * 8 * this.k;
           p.life = Math.min(p.life, 0.4);
         }
       }
@@ -2996,8 +3074,8 @@ var Re = Object.freeze({
       this.p.push({
         x: cx,
         y: cy,
-        vx: (Math.random() - 0.5) * 8 * this.k,
-        vy: -(26 + Math.random() * 18) * this.k,
+        vx: (Math.random() - 0.5) * 6 * this.k,
+        vy: -(25 + Math.random() * 10) * this.k,
         r: ringRadius,
         life: life,
         maxLife: life,
@@ -3006,37 +3084,31 @@ var Re = Object.freeze({
         flavour: f,
         sprite: this.sprite,
         variation: Ae,
-        spinSpeed: direction * 2.8,
+        spinSpeed: direction * 1.5,
         isFingerRing: true,
       });
 
-      this.p.push({
-        x: cx,
-        y: cy,
-        vx: (Math.random() - 0.5) * 5 * this.k,
-        vy: -(23 + Math.random() * 14) * this.k,
-        r: ringRadius * 0.74,
-        life: life * 0.9,
-        maxLife: life * 0.9,
-        ring: true,
-        seed: seed + 1.2,
-        flavour: f,
-        sprite: this.sprite,
-        variation: Ae,
-        spinSpeed: -direction * 1.8,
-        isFingerRing: true,
-      });
-
-      if (!this.pulses) this.pulses = [];
-      this.pulses.push({
-        x: cx,
-        y: cy,
-        r: ringRadius * 0.9,
-        maxR: ringRadius * 2.4,
-        growth: 150 * this.k,
-        alpha: 1.0,
-        color: f.waterLit || f.smoke || "#FFFFE3",
-      });
+      for (let i = 0; i < 8; i++) {
+        let ang = (i / 8) * Math.PI * 2 + (Math.random() - 0.5) * 0.6;
+        let pDist = ringRadius * (0.85 + Math.random() * 0.35);
+        let puffSpd = (10 + Math.random() * 14) * this.k;
+        let pLife = (1.4 + Math.random() * 0.8) * f.life;
+        this.p.push({
+          x: cx + Math.cos(ang) * pDist,
+          y: cy + Math.sin(ang) * pDist,
+          vx: Math.cos(ang) * puffSpd,
+          vy: Math.sin(ang) * puffSpd - (14 + Math.random() * 10) * this.k,
+          r: (12 + Math.random() * 10) * this.k,
+          life: pLife,
+          maxLife: pLife,
+          ring: false,
+          seed: Math.random() * 6.28,
+          flavour: f,
+          sprite: this.sprite,
+          variation: Ae,
+          faint: 0.38,
+        });
+      }
 
       try {
         window.hookahAudio?.playRingChime();
@@ -3067,31 +3139,67 @@ var Re = Object.freeze({
           a.restore());
       }
       if (l) {
-        this.supportsFilter && (a.filter = "blur(1.2px)");
+        this.supportsFilter && (a.filter = "blur(1.6px)");
         for (let n of this.p) {
           if (!n.ring || !s(n)) continue;
           let c = Math.max(1, n.r / r),
-            i = a.createLinearGradient(
-              n.x / r - c,
-              n.y / r - c,
-              n.x / r + c,
-              n.y / r + c,
-            );
-          (i.addColorStop(0, n.flavour.pale),
-            i.addColorStop(0.35, n.flavour.smoke),
-            i.addColorStop(1, n.flavour.smoke),
-            (a.strokeStyle = i),
-            (a.globalAlpha = Math.min(1, Math.pow(n.life / n.maxLife, 0.8))),
-            (a.lineWidth = Math.max(1, c * (n.isFingerRing ? 0.44 : 0.34))));
-          let h = 1 - n.life / n.maxLife,
+            h = 1 - n.life / n.maxLife,
             d = nt(c, n.seed, h, this.reducedMotion),
             p = it(h);
           if (p < 2) continue;
           let f = n.x / r,
-            m = n.y / r;
-          (a.beginPath(), a.moveTo(f + d[0][0], m + d[0][1]));
+            m = n.y / r,
+            baseAlpha = Math.min(0.9, Math.pow(n.life / n.maxLife, 0.75));
+
+          // 1. Soft diffuse outer smoke bloom
+          a.save();
+          a.strokeStyle = n.flavour.pale || "#E4E3EF";
+          a.globalAlpha = baseAlpha * 0.36;
+          a.lineWidth = Math.max(2.5, c * 0.48);
+          a.lineCap = "round";
+          a.lineJoin = "round";
+          a.beginPath();
+          a.moveTo(f + d[0][0], m + d[0][1]);
           for (let y = 1; y < p; y++) a.lineTo(f + d[y][0], m + d[y][1]);
-          (p === d.length && a.closePath(), a.stroke());
+          if (p === d.length) a.closePath();
+          a.stroke();
+          a.restore();
+
+          // 2. Dense organic toroidal vortex core
+          a.save();
+          let grad = a.createLinearGradient(f - c, m - c, f + c, m + c);
+          grad.addColorStop(0, n.flavour.pale || "#E4E3EF");
+          grad.addColorStop(0.35, n.flavour.smoke || "#ECEDF8");
+          grad.addColorStop(1, n.flavour.smoke || "#ECEDF8");
+          a.strokeStyle = grad;
+          a.globalAlpha = baseAlpha * 0.88;
+          a.lineWidth = Math.max(1.8, c * 0.26);
+          a.lineCap = "round";
+          a.lineJoin = "round";
+          a.beginPath();
+          a.moveTo(f + d[0][0], m + d[0][1]);
+          for (let y = 1; y < p; y++) a.lineTo(f + d[y][0], m + d[y][1]);
+          if (p === d.length) a.closePath();
+          a.stroke();
+          a.restore();
+
+          // 3. Volumetric organic smoke puffs along the ring contour
+          a.save();
+          let numSatellites = 10;
+          for (let si = 0; si < numSatellites; si++) {
+            let vi = Math.floor((si / numSatellites) * (p - 1));
+            let pt = d[vi];
+            if (!pt) continue;
+            let px = f + pt[0];
+            let py = m + pt[1];
+            let puffRad = (c * 0.15) * (0.8 + 0.4 * Math.sin(si * 2.3 + n.seed));
+            a.beginPath();
+            a.arc(px, py, Math.max(2, puffRad), 0, Math.PI * 2);
+            a.fillStyle = n.flavour.smoke || "#ECEDF8";
+            a.globalAlpha = baseAlpha * 0.24;
+            a.fill();
+          }
+          a.restore();
         }
         this.supportsFilter && (a.filter = "none");
       }
@@ -3115,88 +3223,66 @@ var Re = Object.freeze({
 
           o.save();
 
-          o.beginPath();
-          o.arc(cx, cy, swR, startA, endA, dir < 0);
-          o.strokeStyle = this.flavour.pale || "#E4E3EF";
-          o.lineWidth = Math.max(3, 16 * this.k * (0.4 + 0.6 * p));
-          o.globalAlpha = 0.38 * p;
-          o.lineCap = "round";
-          o.stroke();
-
-          o.beginPath();
-          o.arc(cx, cy, swR, startA, endA, dir < 0);
-          o.strokeStyle = this.flavour.smoke || "#ECEDF8";
-          o.lineWidth = Math.max(2.2, 8 * this.k * (0.5 + 0.5 * p));
-          o.globalAlpha = Math.min(0.95, 0.4 + 0.6 * p);
-          o.stroke();
-
-          let numPuffs = Math.max(3, Math.floor(14 * p));
-          let tNow = performance.now() * 0.005;
+          // 1. Soft billowing smoke puffs along the swirl curve
+          let numPuffs = Math.max(8, Math.floor(32 * p));
+          let tNow = performance.now() * 0.004;
           for (let pi = 0; pi <= numPuffs; pi++) {
             let frac = pi / numPuffs;
             let ang = startA + frac * sweep;
-            let puffR = (7 + 4 * Math.sin(pi * 2.3 + tNow * 4)) * this.k;
-            let px = cx + Math.cos(ang) * swR;
-            let py = cy + Math.sin(ang) * swR;
+            let rWobble = swR * (1 + 0.09 * Math.sin(ang * 3 + tNow * 3) + 0.05 * Math.cos(ang * 5));
+            let px = cx + Math.cos(ang) * rWobble;
+            let py = cy + Math.sin(ang) * rWobble;
+            let puffR = (9 + 5 * Math.sin(pi * 2.1 + tNow * 3)) * this.k * (0.6 + 0.5 * frac);
+
+            let grad = o.createRadialGradient(px, py, 0, px, py, puffR);
+            grad.addColorStop(0, this.flavour.smoke || "#ECEDF8");
+            grad.addColorStop(0.5, this.flavour.pale || "#E4E3EF");
+            grad.addColorStop(1, "rgba(236,237,248,0)");
+            o.fillStyle = grad;
+            o.globalAlpha = 0.35 * p;
             o.beginPath();
             o.arc(px, py, puffR, 0, Math.PI * 2);
-            o.fillStyle = this.flavour.smoke || "#ECEDF8";
-            o.globalAlpha = 0.3 * p;
             o.fill();
           }
 
+          // 2. Soft translucent swirling smoke ribbon connecting them
+          o.beginPath();
+          o.arc(cx, cy, swR, startA, endA, dir < 0);
+          o.strokeStyle = this.flavour.smoke || "#ECEDF8";
+          o.lineWidth = Math.max(2, 10 * this.k * (0.5 + 0.5 * p));
+          o.globalAlpha = 0.28 * p;
+          o.lineCap = "round";
+          o.stroke();
+
+          // 3. Gentle wisp at the fingertip head
           let headX = cx + Math.cos(endA) * swR;
           let headY = cy + Math.sin(endA) * swR;
-          let hGlow = o.createRadialGradient(headX, headY, 0, headX, headY, 26 * this.k);
-          hGlow.addColorStop(0, this.flavour.waterLit || "#FFFFE3");
-          hGlow.addColorStop(0.4, this.flavour.smoke || "#ECEDF8");
+          let hGlow = o.createRadialGradient(headX, headY, 0, headX, headY, 18 * this.k);
+          hGlow.addColorStop(0, this.flavour.smoke || "#ECEDF8");
+          hGlow.addColorStop(0.5, this.flavour.pale || "#E4E3EF");
           hGlow.addColorStop(1, "rgba(255,255,255,0)");
           o.fillStyle = hGlow;
-          o.globalAlpha = 0.85;
+          o.globalAlpha = 0.55 * p;
           o.beginPath();
-          o.arc(headX, headY, 26 * this.k, 0, Math.PI * 2);
+          o.arc(headX, headY, 18 * this.k, 0, Math.PI * 2);
           o.fill();
 
-          let pctText = Math.round(p * 100) + "%";
-          o.font = `600 ${Math.round(14 * this.k)}px Lora, Georgia, serif`;
-          o.fillStyle = this.flavour.waterLit || "#FFFFE3";
-          o.textAlign = "center";
-          o.textBaseline = "middle";
-          o.globalAlpha = 0.85 * p;
-          o.fillText(pctText, cx, cy);
-
-          o.restore();
-        }
-
-        if (this.pulses && this.pulses.length) {
-          o.save();
-          for (let pulse of this.pulses) {
-            o.beginPath();
-            o.arc(pulse.x, pulse.y, pulse.r, 0, Math.PI * 2);
-            o.strokeStyle = pulse.color;
-            o.globalAlpha = Math.max(0, pulse.alpha);
-            o.lineWidth = Math.max(2, 4 * this.k * pulse.alpha);
-            o.stroke();
-          }
           o.restore();
         }
 
         if (this.activeFingers && this.activeFingers.length) {
           o.save();
-          let tNow = performance.now() * 0.005;
+          let tNow = performance.now() * 0.004;
           for (let f of this.activeFingers) {
-            let auraR = (f.inSmoke ? 28 : 16) * this.k;
+            let auraR = (f.inSmoke ? 20 : 12) * this.k;
+            let grad = o.createRadialGradient(f.x, f.y, 0, f.x, f.y, auraR);
+            grad.addColorStop(0, f.inSmoke ? (this.flavour.waterLit || "#FFFFE3") : "rgba(255,255,255,0.7)");
+            grad.addColorStop(0.5, f.inSmoke ? (this.flavour.smoke || "#ECEDF8") : "rgba(255,255,255,0.25)");
+            grad.addColorStop(1, "rgba(255,255,255,0)");
+            o.fillStyle = grad;
+            o.globalAlpha = f.inSmoke ? (0.6 + 0.2 * Math.sin(tNow * 5)) : 0.3;
             o.beginPath();
-            o.arc(f.x, f.y, auraR + 3 * Math.sin(tNow * 5), 0, Math.PI * 2);
-            o.strokeStyle = f.inSmoke ? (this.flavour.waterLit || "#FFFFE3") : "rgba(255,255,255,0.6)";
-            o.globalAlpha = f.inSmoke ? (0.75 + 0.25 * Math.sin(tNow * 6)) : 0.45;
-            o.lineWidth = f.inSmoke ? 2.5 : 1.5;
-            o.stroke();
-
-            o.beginPath();
-            o.arc(f.x, f.y, 4 * this.k, 0, Math.PI * 2);
-            o.fillStyle = f.inSmoke ? (this.flavour.waterLit || "#FFFFE3") : "#ffffff";
-            o.globalAlpha = 0.85;
+            o.arc(f.x, f.y, auraR, 0, Math.PI * 2);
             o.fill();
           }
           o.restore();
@@ -3377,7 +3463,7 @@ var Pe = class {
       (this.body.flavour = o),
       e ? this.ritual.start(o) : this.ritual.reset());
   }
-  draw(o, e, s, a = !1, fingers = []) {
+  draw(o, e, s, a = !1, fingers = [], handsData = []) {
     this.t += s;
     let r = this.body,
       l = e.state === K.DRAWING ? 0.25 + 0.75 * e.drawIntensity : 0;
@@ -3397,6 +3483,7 @@ var Pe = class {
     let n = 0.62 + 2.3 * this.coalGlow;
     this.smoke.ambient(r.coalPos, s, n, 30);
     for (let [d, p, f] of r.vents) this.smoke.ambient([d, p], s, n * 0.7, f);
+    this.smoke.interactWithHands(handsData, s);
     this.smoke.interactWithFingers(fingers, s);
     this.smoke.step(s);
     let c = e.mouthpieceBase,
@@ -4465,19 +4552,26 @@ function Lt(t) {
   }
 
   let fingerPoints = [];
+  let handsData = [];
   if (de.hands && de.hands.length) {
     for (let h of de.hands) {
       if (h.landmarks && h.landmarks[8]) {
         fingerPoints.push([h.landmarks[8][0], h.landmarks[8][1]]);
+      }
+      let palm = h.gripPoint || (h.landmarks && h.landmarks[9]) || (h.landmarks && h.landmarks[0]);
+      if (palm) {
+        handsData.push({ x: palm[0], y: palm[1], grip: h.grip });
       }
     }
   }
   if (activeTouchPoints.size > 0) {
     for (let pt of activeTouchPoints.values()) {
       fingerPoints.push(pt);
+      handsData.push({ x: pt[0], y: pt[1], isPointer: true });
     }
-  } else if (currentPointerPos && isPointerDown) {
-    fingerPoints.push(currentPointerPos);
+  } else if (currentPointerPos) {
+    if (isPointerDown) fingerPoints.push(currentPointerPos);
+    handsData.push({ x: currentPointerPos[0], y: currentPointerPos[1], isPointer: true, isDown: isPointerDown });
   }
 
   let s = W.update(hands, face, o),
@@ -4485,7 +4579,7 @@ function Lt(t) {
       ? `${$e.toFixed(0)} fps  detect ${te.msPerFrame.toFixed(0)} ms  ${J}x${q}  hands ${de.hands.length}  face ${de.face ? "yes" : "no"}`
       : null,
     r = ce || (e || Pt || interactiveActive ? null : ro);
-  (j.draw(ee, s, o, ge, fingerPoints), I.root.hidden || ao(s, r, a));
+  (j.draw(ee, s, o, ge, fingerPoints, handsData), I.root.hidden || ao(s, r, a));
 }
 function po() {
   (pe.classList.add("leaving"),
