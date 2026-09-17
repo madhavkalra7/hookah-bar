@@ -2822,13 +2822,163 @@ var Re = Object.freeze({
         ((r.x += r.vx * o),
           (r.y += r.vy * o),
           (r.r += (r.ring ? 20 : 26) * e * o * l.growth * n.growth),
+          (r.seed += (r.spinSpeed || 0) * o),
           (r.life -= o),
           (r.life <= 0 || r.y < -r.r || r.x < -r.r || r.x > this.W + r.r) &&
             this.p.splice(a, 1));
       }
+      if (this.pulses) {
+        for (let pi = this.pulses.length - 1; pi >= 0; pi--) {
+          let pulse = this.pulses[pi];
+          pulse.r += pulse.growth * o;
+          pulse.alpha -= o * 1.5;
+          if (pulse.alpha <= 0) this.pulses.splice(pi, 1);
+        }
+      }
+      if (this.swirlCooldown > 0) this.swirlCooldown -= o;
+    }
+    hasBreathSmoke() {
+      return this.p.some((n) => !n.gas);
+    }
+    interactWithFingers(fingers, dt) {
+      if (!this.fingerTrails) {
+        this.fingerTrails = new Map();
+        this.swirlCooldown = 0;
+        this.pulses = [];
+        this.activeFingers = [];
+      }
+      this.activeFingers = [];
+      if (!fingers || !fingers.length) {
+        this.fingerTrails.clear();
+        return;
+      }
+      const now = performance.now();
+      for (let fIdx = 0; fIdx < fingers.length; fIdx++) {
+        const f = fingers[fIdx];
+        if (!f) continue;
+        const fx = f[0], fy = f[1];
+        let nearby = [];
+        for (let p of this.p) {
+          if (p.gas) continue;
+          let dx = p.x - fx, dy = p.y - fy;
+          let d = Math.hypot(dx, dy);
+          if (d < 160 * this.k) nearby.push({ p, dx, dy, d });
+        }
+        const isTouchingSmoke = nearby.length >= 2;
+        this.activeFingers.push({ x: fx, y: fy, inSmoke: isTouchingSmoke });
+        for (let item of nearby) {
+          let p = item.p;
+          let d = Math.max(1, item.d);
+          let factor = (1 - d / (160 * this.k));
+          let swirlForce = factor * 140 * this.k;
+          p.vx += (-item.dy / d) * swirlForce * dt * 4;
+          p.vy += (item.dx / d) * swirlForce * dt * 4;
+          let pull = (d - 45 * this.k) * 0.35 * factor;
+          p.vx -= (item.dx / d) * pull * dt * 3;
+          p.vy -= (item.dy / d) * pull * dt * 3;
+        }
+        let trail = this.fingerTrails.get(fIdx);
+        if (!trail) {
+          trail = [];
+          this.fingerTrails.set(fIdx, trail);
+        }
+        trail.push({ x: fx, y: fy, t: now, inSmoke: isTouchingSmoke });
+        while (trail.length > 0 && now - trail[0].t > 850) trail.shift();
+        if (trail.length < 7 || this.swirlCooldown > 0) continue;
+        const smokePoints = trail.filter(pt => pt.inSmoke);
+        if (smokePoints.length < 5) continue;
+        let cx = 0, cy = 0;
+        for (let pt of trail) {
+          cx += pt.x;
+          cy += pt.y;
+        }
+        cx /= trail.length;
+        cy /= trail.length;
+        let avgR = 0;
+        for (let pt of trail) avgR += Math.hypot(pt.x - cx, pt.y - cy);
+        avgR /= trail.length;
+        if (avgR < 18 * this.k || avgR > 180 * this.k) continue;
+        let totalAngle = 0;
+        let prevAngle = Math.atan2(trail[0].y - cy, trail[0].x - cx);
+        for (let i = 1; i < trail.length; i++) {
+          let curAngle = Math.atan2(trail[i].y - cy, trail[i].x - cx);
+          let delta = curAngle - prevAngle;
+          while (delta > Math.PI) delta -= Math.PI * 2;
+          while (delta < -Math.PI) delta += Math.PI * 2;
+          totalAngle += delta;
+          prevAngle = curAngle;
+        }
+        if (Math.abs(totalAngle) >= 1.65 * Math.PI) {
+          const direction = totalAngle > 0 ? 1 : -1;
+          this.spawnFingerRing(cx, cy, avgR, direction, nearby);
+          this.swirlCooldown = 0.45;
+          trail.length = 0;
+        }
+      }
+    }
+    spawnFingerRing(cx, cy, avgR, direction = 1, nearby = []) {
+      let f = this.flavour;
+      let ringRadius = Math.max(32 * this.k, avgR * 1.08);
+      let life = 3.6 * f.life;
+      let seed = Math.random() * 6.28;
+      if (nearby && nearby.length) {
+        for (let item of nearby.slice(0, 20)) {
+          let p = item.p;
+          let angle = Math.atan2(p.y - cy, p.x - cx);
+          p.x = cx + Math.cos(angle) * ringRadius + (Math.random() - 0.5) * 8 * this.k;
+          p.y = cy + Math.sin(angle) * ringRadius + (Math.random() - 0.5) * 8 * this.k;
+          p.life = Math.min(p.life, 0.45);
+        }
+      }
+      this.p.push({
+        x: cx,
+        y: cy,
+        vx: (Math.random() - 0.5) * 10 * this.k,
+        vy: -(22 + Math.random() * 16) * this.k,
+        r: ringRadius,
+        life: life,
+        maxLife: life,
+        ring: true,
+        seed: seed,
+        flavour: f,
+        sprite: this.sprite,
+        variation: Ae,
+        spinSpeed: direction * 2.4,
+        isFingerRing: true,
+      });
+      this.p.push({
+        x: cx,
+        y: cy,
+        vx: (Math.random() - 0.5) * 6 * this.k,
+        vy: -(18 + Math.random() * 12) * this.k,
+        r: ringRadius * 0.72,
+        life: life * 0.85,
+        maxLife: life * 0.85,
+        ring: true,
+        seed: seed + 0.8,
+        flavour: f,
+        sprite: this.sprite,
+        variation: Ae,
+        spinSpeed: -direction * 1.6,
+        isFingerRing: true,
+      });
+      if (!this.pulses) this.pulses = [];
+      this.pulses.push({
+        x: cx,
+        y: cy,
+        r: ringRadius * 0.8,
+        maxR: ringRadius * 2.2,
+        growth: 120 * this.k,
+        alpha: 0.95,
+        color: f.smoke || "#FFFFE3",
+      });
+      try {
+        window.hookahAudio?.playRingChime();
+      } catch (_) {}
+      window.__lastChhallaTime = performance.now();
     }
     draw(o, e = "all") {
-      if (!this.p.length) return;
+      if (!this.p.length && (!this.pulses || !this.pulses.length) && (!this.activeFingers || !this.activeFingers.length)) return;
       let s = (n) => e === "all" || (e === "gas") == !!n.gas,
         a = this.lctx,
         r = this.s;
@@ -2866,7 +3016,7 @@ var Re = Object.freeze({
             i.addColorStop(1, n.flavour.smoke),
             (a.strokeStyle = i),
             (a.globalAlpha = Math.min(1, Math.pow(n.life / n.maxLife, 0.8))),
-            (a.lineWidth = Math.max(1, c * 0.34)));
+            (a.lineWidth = Math.max(1, c * (n.isFingerRing ? 0.42 : 0.34))));
           let h = 1 - n.life / n.maxLife,
             d = nt(c, n.seed, h, this.reducedMotion),
             p = it(h);
@@ -2886,6 +3036,36 @@ var Re = Object.freeze({
         (o.imageSmoothingQuality = "high"),
         o.drawImage(this.layer, 0, 0, this.W, this.H),
         o.restore());
+
+      if (e === "all" || e === "breath") {
+        if (this.pulses && this.pulses.length) {
+          o.save();
+          for (let pulse of this.pulses) {
+            o.beginPath();
+            o.arc(pulse.x, pulse.y, pulse.r, 0, Math.PI * 2);
+            o.strokeStyle = pulse.color;
+            o.globalAlpha = Math.max(0, pulse.alpha);
+            o.lineWidth = Math.max(1.5, 3 * this.k * pulse.alpha);
+            o.stroke();
+          }
+          o.restore();
+        }
+        if (this.activeFingers && this.activeFingers.length) {
+          o.save();
+          let tNow = performance.now() * 0.005;
+          for (let f of this.activeFingers) {
+            if (!f.inSmoke) continue;
+            let auraR = 26 * this.k;
+            o.beginPath();
+            o.arc(f.x, f.y, auraR + 3 * Math.sin(tNow * 5), 0, Math.PI * 2);
+            o.strokeStyle = this.flavour.smoke || "#FFFFE3";
+            o.globalAlpha = 0.55 + 0.25 * Math.sin(tNow * 6);
+            o.lineWidth = 1.8;
+            o.stroke();
+          }
+          o.restore();
+        }
+      }
     }
   };
 var Se = class {
@@ -3061,7 +3241,7 @@ var Pe = class {
       (this.body.flavour = o),
       e ? this.ritual.start(o) : this.ritual.reset());
   }
-  draw(o, e, s, a = !1) {
+  draw(o, e, s, a = !1, fingers = []) {
     this.t += s;
     let r = this.body,
       l = e.state === K.DRAWING ? 0.25 + 0.75 * e.drawIntensity : 0;
@@ -3081,6 +3261,7 @@ var Pe = class {
     let n = 0.62 + 2.3 * this.coalGlow;
     this.smoke.ambient(r.coalPos, s, n, 30);
     for (let [d, p, f] of r.vents) this.smoke.ambient([d, p], s, n * 0.7, f);
+    this.smoke.interactWithFingers(fingers, s);
     this.smoke.step(s);
     let c = e.mouthpieceBase,
       i = e.mouthpieceTip,
@@ -3881,6 +4062,12 @@ function ao(t, o, e) {
       (s = `Step ${s} of 3`),
       (r = t.state),
       (l = t.lung));
+    if (window.__lastChhallaTime && (performance.now() - window.__lastChhallaTime < 2200)) {
+      a = "✨ Chhalla created! Spin your finger for more!";
+      r = "chhalle";
+    } else if (j && j.smoke && j.smoke.hasBreathSmoke() && (t.state === "idle" || t.state === "exhaling")) {
+      a = "Touch the smoke & spin your finger round & round for chhalle ⭕";
+    }
   }
   let c = `${s}|${a}|${r}|${n}|${!!o}`;
   if (c !== I.last) {
@@ -4031,6 +4218,9 @@ async function co() {
 var interactiveActive = false;
 var pointerDragging = false;
 var pointerPos = [0, 0];
+var currentPointerPos = null;
+var isPointerDown = false;
+var activeTouchPoints = new Map();
 var exhaleCountdown = 0;
 
 Ke.addEventListener("pointerdown", (evt) => {
@@ -4042,27 +4232,42 @@ Ke.addEventListener("pointerdown", (evt) => {
   const cx = (evt.clientX - rect.left) * scaleX;
   const cy = (evt.clientY - rect.top) * scaleY;
 
+  isPointerDown = true;
+  currentPointerPos = [cx, cy];
+  activeTouchPoints.set(evt.pointerId, [cx, cy]);
+
   const currentPos = W ? W.pos : [0, 0];
   const dist = Math.hypot(cx - currentPos[0], cy - currentPos[1]);
   const pickDist = W ? Math.max(W.pickupRadius * 2.8, 140 * Ue) : 160;
 
-  if (dist < pickDist || !interactiveActive) {
+  if (dist < pickDist) {
     pointerDragging = true;
     pointerPos = [cx, cy];
     interactiveActive = true;
     try { Ke.setPointerCapture(evt.pointerId); } catch (_) {}
+  } else {
+    interactiveActive = true;
   }
 });
 
 Ke.addEventListener("pointermove", (evt) => {
-  if (!pointerDragging) return;
   const rect = Ke.getBoundingClientRect();
   const scaleX = J / rect.width;
   const scaleY = q / rect.height;
-  pointerPos = [(evt.clientX - rect.left) * scaleX, (evt.clientY - rect.top) * scaleY];
+  const cx = (evt.clientX - rect.left) * scaleX;
+  const cy = (evt.clientY - rect.top) * scaleY;
+  currentPointerPos = [cx, cy];
+  if (activeTouchPoints.has(evt.pointerId)) {
+    activeTouchPoints.set(evt.pointerId, [cx, cy]);
+  }
+  if (pointerDragging) {
+    pointerPos = [cx, cy];
+  }
 });
 
-const releasePointer = () => {
+const releasePointer = (evt) => {
+  activeTouchPoints.delete(evt.pointerId);
+  if (activeTouchPoints.size === 0) isPointerDown = false;
   if (pointerDragging) {
     pointerDragging = false;
     if (W && W.lung > 0.08) {
@@ -4123,12 +4328,28 @@ function Lt(t) {
     }
   }
 
+  let fingerPoints = [];
+  if (de.hands && de.hands.length) {
+    for (let h of de.hands) {
+      if (h.landmarks && h.landmarks[8]) {
+        fingerPoints.push([h.landmarks[8][0], h.landmarks[8][1]]);
+      }
+    }
+  }
+  if (activeTouchPoints.size > 0) {
+    for (let pt of activeTouchPoints.values()) {
+      fingerPoints.push(pt);
+    }
+  } else if (currentPointerPos && isPointerDown) {
+    fingerPoints.push(currentPointerPos);
+  }
+
   let s = W.update(hands, face, o),
     a = ge
       ? `${$e.toFixed(0)} fps  detect ${te.msPerFrame.toFixed(0)} ms  ${J}x${q}  hands ${de.hands.length}  face ${de.face ? "yes" : "no"}`
       : null,
     r = ce || (e || Pt || interactiveActive ? null : ro);
-  (j.draw(ee, s, o, ge), I.root.hidden || ao(s, r, a));
+  (j.draw(ee, s, o, ge, fingerPoints), I.root.hidden || ao(s, r, a));
 }
 function po() {
   (pe.classList.add("leaving"),

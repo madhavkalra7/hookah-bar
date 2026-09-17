@@ -146,6 +146,28 @@ class HookahAudio {
       this.exhaleGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.12);
     }
   }
+
+  // Play resonant ring chime when a smoke ring / chhalla is shaped by finger
+  playRingChime() {
+    if (!this.ctx) return;
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(420, now);
+    osc.frequency.exponentialRampToValueAtTime(780, now + 0.14);
+    osc.frequency.exponentialRampToValueAtTime(620, now + 0.35);
+
+    gain.gain.setValueAtTime(0.01, now);
+    gain.gain.linearRampToValueAtTime(0.22, now + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.38);
+  }
 }
 
 window.hookahAudio = new HookahAudio();
