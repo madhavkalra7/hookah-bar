@@ -12,28 +12,11 @@ No coal, no tobacco, no sutta. Just vibes.
 
 ---
 
-## Made by nycanshu
+## Made by Madhav Kalra
 
-Hookah Baar is built and maintained by **Himanshu Kumar (nycanshu)** — that's
-me, and I'm the original creator of this one. 🙂
+Hookah Baar is maintained and developed by **Madhav Kalra**. 🙂
 
-## Got a crazy idea? 💡
-
-Seriously, send it. I read everything and I've shipped more than a few things
-people asked for.
-
-- **X** — [@Okay_anshu](https://x.com/Okay_anshu)
-- **LinkedIn** — [okay-anshu](https://www.linkedin.com/in/okay-anshu/)
-
-## Built something out of it? Tag me 🏷️
-
-If you take this somewhere wild, I want to see it. Tag me on X or LinkedIn and
-show me what you made. Genuinely, nothing makes my week faster than seeing
-someone else's spin on this.
-
-Credit it as **Hookah Baar by nycanshu** with a link back and we're good. For
-republishing it as-is or anything commercial, just ask me first, the answer is
-usually yes. Full terms in plain English: [LICENSE](LICENSE).
+- **LinkedIn** — [madhav-kalra](https://www.linkedin.com/in/madhav-kalra/)
 
 ---
 
@@ -46,4 +29,4 @@ Nothing is recorded, nothing is uploaded.
 
 ---
 
-Made with ♥ by [nycanshu](https://www.linkedin.com/in/okay-anshu/)
+Made with ♥ by [Madhav Kalra](https://www.linkedin.com/in/madhav-kalra/)

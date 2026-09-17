@@ -8,6 +8,6 @@
     "dev": "node server.js"
   },
   "keywords": ["hookah", "virtual-hookah", "mediapipe", "canvas", "hand-tracking"],
-  "author": "Himanshu Kumar (original) & Antigravity",
+  "author": "Madhav Kalra",
   "license": "MIT"
 }
