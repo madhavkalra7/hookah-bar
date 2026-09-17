@@ -2836,6 +2836,15 @@ var Re = Object.freeze({
         }
       }
       if (this.swirlCooldown > 0) this.swirlCooldown -= o;
+      if (this.activeSwirl && this.activeSwirl.active) {
+        if (performance.now() - this.activeSwirl.lastUpdate > 450) {
+          this.activeSwirl.progress -= o * 2.2;
+          if (this.activeSwirl.progress <= 0) {
+            this.activeSwirl.active = false;
+            this.activeSwirl.progress = 0;
+          }
+        }
+      }
     }
     hasBreathSmoke() {
       return this.p.some((n) => !n.gas);
@@ -2846,6 +2855,18 @@ var Re = Object.freeze({
         this.swirlCooldown = 0;
         this.pulses = [];
         this.activeFingers = [];
+        this.activeSwirl = {
+          active: false,
+          cx: 0,
+          cy: 0,
+          r: 0,
+          startAngle: 0,
+          currentAngle: 0,
+          totalAngle: 0,
+          progress: 0,
+          direction: 1,
+          lastUpdate: 0,
+        };
       }
       this.activeFingers = [];
       if (!fingers || !fingers.length) {
@@ -2853,40 +2874,49 @@ var Re = Object.freeze({
         return;
       }
       const now = performance.now();
+      let breathParticles = this.p.filter((p) => !p.gas);
+
       for (let fIdx = 0; fIdx < fingers.length; fIdx++) {
         const f = fingers[fIdx];
         if (!f) continue;
         const fx = f[0], fy = f[1];
+
         let nearby = [];
-        for (let p of this.p) {
-          if (p.gas) continue;
+        for (let p of breathParticles) {
           let dx = p.x - fx, dy = p.y - fy;
           let d = Math.hypot(dx, dy);
-          if (d < 160 * this.k) nearby.push({ p, dx, dy, d });
+          if (d < 220 * this.k) {
+            nearby.push({ p, dx, dy, d });
+          }
         }
-        const isTouchingSmoke = nearby.length >= 2;
+
+        const isTouchingSmoke = nearby.length >= 1 || (breathParticles.length >= 3 && fy < this.H * 0.78);
         this.activeFingers.push({ x: fx, y: fy, inSmoke: isTouchingSmoke });
+
         for (let item of nearby) {
           let p = item.p;
           let d = Math.max(1, item.d);
-          let factor = (1 - d / (160 * this.k));
-          let swirlForce = factor * 140 * this.k;
-          p.vx += (-item.dy / d) * swirlForce * dt * 4;
-          p.vy += (item.dx / d) * swirlForce * dt * 4;
-          let pull = (d - 45 * this.k) * 0.35 * factor;
-          p.vx -= (item.dx / d) * pull * dt * 3;
-          p.vy -= (item.dy / d) * pull * dt * 3;
+          let factor = 1 - d / (220 * this.k);
+          let swirlForce = factor * 160 * this.k;
+          p.vx += (-item.dy / d) * swirlForce * dt * 5;
+          p.vy += (item.dx / d) * swirlForce * dt * 5;
         }
+
+        if (!isTouchingSmoke) continue;
+
         let trail = this.fingerTrails.get(fIdx);
         if (!trail) {
           trail = [];
           this.fingerTrails.set(fIdx, trail);
         }
-        trail.push({ x: fx, y: fy, t: now, inSmoke: isTouchingSmoke });
-        while (trail.length > 0 && now - trail[0].t > 850) trail.shift();
-        if (trail.length < 7 || this.swirlCooldown > 0) continue;
-        const smokePoints = trail.filter(pt => pt.inSmoke);
-        if (smokePoints.length < 5) continue;
+
+        trail.push({ x: fx, y: fy, t: now });
+        while (trail.length > 0 && now - trail[0].t > 1100) {
+          trail.shift();
+        }
+
+        if (trail.length < 5 || this.swirlCooldown > 0) continue;
+
         let cx = 0, cy = 0;
         for (let pt of trail) {
           cx += pt.x;
@@ -2894,12 +2924,18 @@ var Re = Object.freeze({
         }
         cx /= trail.length;
         cy /= trail.length;
+
         let avgR = 0;
-        for (let pt of trail) avgR += Math.hypot(pt.x - cx, pt.y - cy);
+        for (let pt of trail) {
+          avgR += Math.hypot(pt.x - cx, pt.y - cy);
+        }
         avgR /= trail.length;
-        if (avgR < 18 * this.k || avgR > 180 * this.k) continue;
+
+        if (avgR < 15 * this.k || avgR > 240 * this.k) continue;
+
         let totalAngle = 0;
-        let prevAngle = Math.atan2(trail[0].y - cy, trail[0].x - cx);
+        let startAng = Math.atan2(trail[0].y - cy, trail[0].x - cx);
+        let prevAngle = startAng;
         for (let i = 1; i < trail.length; i++) {
           let curAngle = Math.atan2(trail[i].y - cy, trail[i].x - cx);
           let delta = curAngle - prevAngle;
@@ -2908,33 +2944,60 @@ var Re = Object.freeze({
           totalAngle += delta;
           prevAngle = curAngle;
         }
-        if (Math.abs(totalAngle) >= 1.65 * Math.PI) {
-          const direction = totalAngle > 0 ? 1 : -1;
-          this.spawnFingerRing(cx, cy, avgR, direction, nearby);
-          this.swirlCooldown = 0.45;
-          trail.length = 0;
+
+        let progress = Math.min(1.0, Math.abs(totalAngle) / (1.8 * Math.PI));
+
+        if (progress > 0.08) {
+          this.activeSwirl.active = true;
+          this.activeSwirl.cx = cx;
+          this.activeSwirl.cy = cy;
+          this.activeSwirl.r = Math.max(30 * this.k, avgR);
+          this.activeSwirl.startAngle = startAng;
+          this.activeSwirl.currentAngle = prevAngle;
+          this.activeSwirl.totalAngle = totalAngle;
+          this.activeSwirl.direction = totalAngle >= 0 ? 1 : -1;
+          this.activeSwirl.progress = progress;
+          this.activeSwirl.lastUpdate = now;
+
+          let ringR = this.activeSwirl.r;
+          for (let item of nearby) {
+            let p = item.p;
+            let dCenter = Math.hypot(p.x - cx, p.y - cy);
+            let diff = dCenter - ringR;
+            p.vx -= ((p.x - cx) / (dCenter || 1)) * diff * 0.15;
+            p.vy -= ((p.y - cy) / (dCenter || 1)) * diff * 0.15;
+          }
+
+          if (progress >= 1.0) {
+            this.spawnFingerRing(cx, cy, this.activeSwirl.r, this.activeSwirl.direction, nearby.map(n => n.p));
+            this.activeSwirl.active = false;
+            this.activeSwirl.progress = 0;
+            this.swirlCooldown = 0.35;
+            trail.length = 0;
+          }
         }
       }
     }
     spawnFingerRing(cx, cy, avgR, direction = 1, nearby = []) {
       let f = this.flavour;
-      let ringRadius = Math.max(32 * this.k, avgR * 1.08);
-      let life = 3.6 * f.life;
+      let ringRadius = Math.max(34 * this.k, avgR);
+      let life = 4.2 * f.life;
       let seed = Math.random() * 6.28;
+
       if (nearby && nearby.length) {
-        for (let item of nearby.slice(0, 20)) {
-          let p = item.p;
+        for (let p of nearby.slice(0, 24)) {
           let angle = Math.atan2(p.y - cy, p.x - cx);
-          p.x = cx + Math.cos(angle) * ringRadius + (Math.random() - 0.5) * 8 * this.k;
-          p.y = cy + Math.sin(angle) * ringRadius + (Math.random() - 0.5) * 8 * this.k;
-          p.life = Math.min(p.life, 0.45);
+          p.x = cx + Math.cos(angle) * ringRadius + (Math.random() - 0.5) * 6 * this.k;
+          p.y = cy + Math.sin(angle) * ringRadius + (Math.random() - 0.5) * 6 * this.k;
+          p.life = Math.min(p.life, 0.4);
         }
       }
+
       this.p.push({
         x: cx,
         y: cy,
-        vx: (Math.random() - 0.5) * 10 * this.k,
-        vy: -(22 + Math.random() * 16) * this.k,
+        vx: (Math.random() - 0.5) * 8 * this.k,
+        vy: -(26 + Math.random() * 18) * this.k,
         r: ringRadius,
         life: life,
         maxLife: life,
@@ -2943,42 +3006,45 @@ var Re = Object.freeze({
         flavour: f,
         sprite: this.sprite,
         variation: Ae,
-        spinSpeed: direction * 2.4,
+        spinSpeed: direction * 2.8,
         isFingerRing: true,
       });
+
       this.p.push({
         x: cx,
         y: cy,
-        vx: (Math.random() - 0.5) * 6 * this.k,
-        vy: -(18 + Math.random() * 12) * this.k,
-        r: ringRadius * 0.72,
-        life: life * 0.85,
-        maxLife: life * 0.85,
+        vx: (Math.random() - 0.5) * 5 * this.k,
+        vy: -(23 + Math.random() * 14) * this.k,
+        r: ringRadius * 0.74,
+        life: life * 0.9,
+        maxLife: life * 0.9,
         ring: true,
-        seed: seed + 0.8,
+        seed: seed + 1.2,
         flavour: f,
         sprite: this.sprite,
         variation: Ae,
-        spinSpeed: -direction * 1.6,
+        spinSpeed: -direction * 1.8,
         isFingerRing: true,
       });
+
       if (!this.pulses) this.pulses = [];
       this.pulses.push({
         x: cx,
         y: cy,
-        r: ringRadius * 0.8,
-        maxR: ringRadius * 2.2,
-        growth: 120 * this.k,
-        alpha: 0.95,
-        color: f.smoke || "#FFFFE3",
+        r: ringRadius * 0.9,
+        maxR: ringRadius * 2.4,
+        growth: 150 * this.k,
+        alpha: 1.0,
+        color: f.waterLit || f.smoke || "#FFFFE3",
       });
+
       try {
         window.hookahAudio?.playRingChime();
       } catch (_) {}
       window.__lastChhallaTime = performance.now();
     }
     draw(o, e = "all") {
-      if (!this.p.length && (!this.pulses || !this.pulses.length) && (!this.activeFingers || !this.activeFingers.length)) return;
+      if (!this.p.length && (!this.pulses || !this.pulses.length) && (!this.activeFingers || !this.activeFingers.length) && (!this.activeSwirl || !this.activeSwirl.active)) return;
       let s = (n) => e === "all" || (e === "gas") == !!n.gas,
         a = this.lctx,
         r = this.s;
@@ -3016,7 +3082,7 @@ var Re = Object.freeze({
             i.addColorStop(1, n.flavour.smoke),
             (a.strokeStyle = i),
             (a.globalAlpha = Math.min(1, Math.pow(n.life / n.maxLife, 0.8))),
-            (a.lineWidth = Math.max(1, c * (n.isFingerRing ? 0.42 : 0.34))));
+            (a.lineWidth = Math.max(1, c * (n.isFingerRing ? 0.44 : 0.34))));
           let h = 1 - n.life / n.maxLife,
             d = nt(c, n.seed, h, this.reducedMotion),
             p = it(h);
@@ -3038,6 +3104,70 @@ var Re = Object.freeze({
         o.restore());
 
       if (e === "all" || e === "breath") {
+        if (this.activeSwirl && this.activeSwirl.active && this.activeSwirl.progress > 0.08) {
+          let sw = this.activeSwirl;
+          let p = sw.progress;
+          let cx = sw.cx, cy = sw.cy, swR = sw.r;
+          let dir = sw.direction || 1;
+          let startA = sw.startAngle || 0;
+          let sweep = p * Math.PI * 2 * dir;
+          let endA = startA + sweep;
+
+          o.save();
+
+          o.beginPath();
+          o.arc(cx, cy, swR, startA, endA, dir < 0);
+          o.strokeStyle = this.flavour.pale || "#E4E3EF";
+          o.lineWidth = Math.max(3, 16 * this.k * (0.4 + 0.6 * p));
+          o.globalAlpha = 0.38 * p;
+          o.lineCap = "round";
+          o.stroke();
+
+          o.beginPath();
+          o.arc(cx, cy, swR, startA, endA, dir < 0);
+          o.strokeStyle = this.flavour.smoke || "#ECEDF8";
+          o.lineWidth = Math.max(2.2, 8 * this.k * (0.5 + 0.5 * p));
+          o.globalAlpha = Math.min(0.95, 0.4 + 0.6 * p);
+          o.stroke();
+
+          let numPuffs = Math.max(3, Math.floor(14 * p));
+          let tNow = performance.now() * 0.005;
+          for (let pi = 0; pi <= numPuffs; pi++) {
+            let frac = pi / numPuffs;
+            let ang = startA + frac * sweep;
+            let puffR = (7 + 4 * Math.sin(pi * 2.3 + tNow * 4)) * this.k;
+            let px = cx + Math.cos(ang) * swR;
+            let py = cy + Math.sin(ang) * swR;
+            o.beginPath();
+            o.arc(px, py, puffR, 0, Math.PI * 2);
+            o.fillStyle = this.flavour.smoke || "#ECEDF8";
+            o.globalAlpha = 0.3 * p;
+            o.fill();
+          }
+
+          let headX = cx + Math.cos(endA) * swR;
+          let headY = cy + Math.sin(endA) * swR;
+          let hGlow = o.createRadialGradient(headX, headY, 0, headX, headY, 26 * this.k);
+          hGlow.addColorStop(0, this.flavour.waterLit || "#FFFFE3");
+          hGlow.addColorStop(0.4, this.flavour.smoke || "#ECEDF8");
+          hGlow.addColorStop(1, "rgba(255,255,255,0)");
+          o.fillStyle = hGlow;
+          o.globalAlpha = 0.85;
+          o.beginPath();
+          o.arc(headX, headY, 26 * this.k, 0, Math.PI * 2);
+          o.fill();
+
+          let pctText = Math.round(p * 100) + "%";
+          o.font = `600 ${Math.round(14 * this.k)}px Lora, Georgia, serif`;
+          o.fillStyle = this.flavour.waterLit || "#FFFFE3";
+          o.textAlign = "center";
+          o.textBaseline = "middle";
+          o.globalAlpha = 0.85 * p;
+          o.fillText(pctText, cx, cy);
+
+          o.restore();
+        }
+
         if (this.pulses && this.pulses.length) {
           o.save();
           for (let pulse of this.pulses) {
@@ -3045,23 +3175,29 @@ var Re = Object.freeze({
             o.arc(pulse.x, pulse.y, pulse.r, 0, Math.PI * 2);
             o.strokeStyle = pulse.color;
             o.globalAlpha = Math.max(0, pulse.alpha);
-            o.lineWidth = Math.max(1.5, 3 * this.k * pulse.alpha);
+            o.lineWidth = Math.max(2, 4 * this.k * pulse.alpha);
             o.stroke();
           }
           o.restore();
         }
+
         if (this.activeFingers && this.activeFingers.length) {
           o.save();
           let tNow = performance.now() * 0.005;
           for (let f of this.activeFingers) {
-            if (!f.inSmoke) continue;
-            let auraR = 26 * this.k;
+            let auraR = (f.inSmoke ? 28 : 16) * this.k;
             o.beginPath();
             o.arc(f.x, f.y, auraR + 3 * Math.sin(tNow * 5), 0, Math.PI * 2);
-            o.strokeStyle = this.flavour.smoke || "#FFFFE3";
-            o.globalAlpha = 0.55 + 0.25 * Math.sin(tNow * 6);
-            o.lineWidth = 1.8;
+            o.strokeStyle = f.inSmoke ? (this.flavour.waterLit || "#FFFFE3") : "rgba(255,255,255,0.6)";
+            o.globalAlpha = f.inSmoke ? (0.75 + 0.25 * Math.sin(tNow * 6)) : 0.45;
+            o.lineWidth = f.inSmoke ? 2.5 : 1.5;
             o.stroke();
+
+            o.beginPath();
+            o.arc(f.x, f.y, 4 * this.k, 0, Math.PI * 2);
+            o.fillStyle = f.inSmoke ? (this.flavour.waterLit || "#FFFFE3") : "#ffffff";
+            o.globalAlpha = 0.85;
+            o.fill();
           }
           o.restore();
         }
