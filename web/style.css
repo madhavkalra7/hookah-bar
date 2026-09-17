@@ -71,6 +71,8 @@ html, body { margin: 0; height: 100%; background: var(--gray); color: var(--ink)
 .btn-cta:hover { background: var(--slate-deep); transform: translateY(-2px); box-shadow: 0 12px 26px rgba(35, 35, 35, 0.24); }
 .btn-cta:active { transform: translateY(0); box-shadow: var(--shadow-soft); }
 .btn-cta:disabled { background: var(--gray); color: #6f6f6f; border-color: var(--gray); box-shadow: none; cursor: progress; transform: none; }
+.btn-subtle { width: 100%; font-size: 12px; padding: 13px 18px; margin-top: 10px; color: var(--charcoal); background: rgba(0, 0, 0, 0.04); border: 1px solid rgba(0, 0, 0, 0.14); box-shadow: none; }
+.btn-subtle:hover { background: rgba(0, 0, 0, 0.08); transform: translateY(-1px); }
 .btn:focus-visible, .foot a:focus-visible { outline: 2px solid var(--slate); outline-offset: 3px; }
 
 /* --------------------------------------------------------------- intro sheet */

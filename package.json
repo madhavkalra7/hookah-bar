@@ -1,0 +1,13 @@
+{
+  "name": "hookah-baar",
+  "version": "1.0.0",
+  "description": "Hookah Baar — the online virtual hookah lounge you smoke with your hands",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["hookah", "virtual-hookah", "mediapipe", "canvas", "hand-tracking"],
+  "author": "Himanshu Kumar (original) & Antigravity",
+  "license": "MIT"
+}
